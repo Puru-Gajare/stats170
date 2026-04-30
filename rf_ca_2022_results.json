@@ -1,16 +1,16 @@
 {
   "model_name": "Random Forest CA 2022 Sold Homes",
-  "rows_used": 79032,
+  "rows_used": 79000,
   "metrics": {
-    "r2": 0.7063,
-    "rmse": 610484,
-    "mae": 191639
+    "r2": 0.7106,
+    "rmse": 656394,
+    "mae": 195674
   },
   "feature_importance": {
-    "house_size": 0.4881,
-    "zip_encoded": 0.282,
-    "acre_lot": 0.0974,
-    "bath": 0.0784,
-    "bed": 0.0541
+    "house_size": 0.4815,
+    "zip_encoded": 0.2791,
+    "acre_lot": 0.0983,
+    "bath": 0.0896,
+    "bed": 0.0514
   }
 }

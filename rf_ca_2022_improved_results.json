@@ -1,0 +1,22 @@
+{
+  "model_name": "Improved Random Forest CA 2022 Sold Homes",
+  "rows_used": 78367,
+  "metrics": {
+    "r2": 0.833,
+    "rmse": 346321,
+    "mae": 154381
+  },
+  "feature_importance": {
+    "zip_avg_price": 0.3386,
+    "city_avg_price": 0.2666,
+    "log_house_size": 0.1119,
+    "house_size": 0.1049,
+    "bath": 0.0438,
+    "rooms_total": 0.0407,
+    "sqft_per_bed": 0.0227,
+    "log_acre_lot": 0.0223,
+    "acre_lot": 0.0215,
+    "bed": 0.0192,
+    "bath_per_bed": 0.0078
+  }
+}
