@@ -56,32 +56,46 @@ if r.status_code == 200:
     # Ensure types for calculation
     for var in variables.values():
         census_df[var] = pd.to_numeric(census_df[var], errors='coerce')
-        
-    # Calculate derived features
+
+    # Replace Census sentinel values with NaN.
+    # The Census API uses -666666666 to indicate suppressed/unavailable data.
+    # Any negative value in these count/income columns is invalid.
+    for var in variables.values():
+        census_df[var] = census_df[var].where(census_df[var] >= 0, other=float('nan'))
+
+    # Calculate derived rates (NaN propagates if denominator or numerator is NaN)
     census_df['poverty_rate'] = census_df['B17001_002E'] / census_df['B17001_001E']
     census_df['bachelors_rate'] = census_df['B15003_022E'] / census_df['B15003_001E']
-    
-    # Rename variables to readable names
+
+    # Also replace any 0-denominator results (division by zero -> inf/nan)
+    census_df['poverty_rate'] = census_df['poverty_rate'].replace([float('inf'), float('-inf')], float('nan'))
+    census_df['bachelors_rate'] = census_df['bachelors_rate'].replace([float('inf'), float('-inf')], float('nan'))
+
+    # Rename raw variables to readable names
     rename_dict = {v: k for k, v in variables.items()}
     census_df = census_df.rename(columns=rename_dict)
-    
-    # Keep only what we need
-    cols_to_keep = ['zip_code', 'median_income', 'population', 'poverty_rate', 'bachelors_rate']
-    census_df = census_df[cols_to_keep]
-    
+
+    # Keep only the final enrichment columns
+    census_cols = ['zip_code', 'median_income', 'population', 'poverty_rate', 'bachelors_rate']
+    census_df = census_df[census_cols]
+
     # Merge with the CA 2022 dataset
     print("Merging Census data with housing data...")
     initial_count = len(ca_2022)
     ca_2022 = ca_2022.merge(census_df, on='zip_code', how='left')
-    
-    # Drop rows where census information is missing
-    # We'll check for median_income as a proxy for all census data
-    ca_2022 = ca_2022.dropna(subset=['median_income'])
+
+    # Drop rows with any missing census value (sentinel-replaced NaN or unmatched ZIP)
+    print("Dropping rows with missing or invalid Census data:")
+    for col in ['median_income', 'population', 'poverty_rate', 'bachelors_rate']:
+        n_missing = ca_2022[col].isna().sum()
+        print(f"  {col}: {n_missing} missing")
+
+    ca_2022 = ca_2022.dropna(subset=['median_income', 'population', 'poverty_rate', 'bachelors_rate'])
     final_count = len(ca_2022)
     dropped_count = initial_count - final_count
-    
+
     print(f"Successfully enriched data.")
-    print(f"Rows dropped due to missing Census information: {dropped_count}")
+    print(f"Rows dropped due to missing/invalid Census information: {dropped_count}")
     print(f"Final record count: {final_count}")
 else:
     print(f"Failed to fetch Census data. Status code: {r.status_code}")
