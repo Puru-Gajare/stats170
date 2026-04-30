@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import json
 import os
@@ -12,7 +13,8 @@ print(f"Loading {pkl_path}...")
 df = pd.read_pickle(pkl_path)
 
 # Drop rows with missing values in core features
-core_cols = ['price', 'bed', 'bath', 'house_size', 'acre_lot', 'city']
+core_cols = ['price', 'bed', 'bath', 'house_size', 'acre_lot', 'city',
+             'median_income', 'population', 'poverty_rate', 'bachelors_rate']
 df = df.dropna(subset=core_cols)
 
 # Filter out extreme outliers for a more stable linear model
@@ -26,8 +28,9 @@ print(f"Dataset size after cleaning/filtering: {len(df)}")
 df['city_encoded'] = df['city'].astype('category').cat.codes
 
 # ── Features / target ─────────────────────────────────────────────────────────
-# Features: bed, bath, house_size, acre_lot, city_encoded
-features = ['bed', 'bath', 'house_size', 'acre_lot', 'city_encoded']
+# Features: bed, bath, house_size, acre_lot, city_encoded + Census features
+features = ['bed', 'bath', 'house_size', 'acre_lot', 'city_encoded',
+            'median_income', 'population', 'poverty_rate', 'bachelors_rate']
 X = df[features]
 y = df['price']
 
@@ -35,13 +38,17 @@ X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42
 )
 
-# ── Train ─────────────────────────────────────────────────────────────────────
-print("Training Linear Regression model...")
+# ── Train with Scaling ────────────────────────────────────────────────────────
+print("Standardizing features and training model...")
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
 model = LinearRegression()
-model.fit(X_train, y_train)
+model.fit(X_train_scaled, y_train)
 
 # ── Evaluate ──────────────────────────────────────────────────────────────────
-y_pred = model.predict(X_test)
+y_pred = model.predict(X_test_scaled)
 
 rmse = np.sqrt(mean_squared_error(y_test, y_pred))
 mae  = mean_absolute_error(y_test, y_pred)
