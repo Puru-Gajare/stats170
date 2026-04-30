@@ -71,9 +71,18 @@ if r.status_code == 200:
     
     # Merge with the CA 2022 dataset
     print("Merging Census data with housing data...")
+    initial_count = len(ca_2022)
     ca_2022 = ca_2022.merge(census_df, on='zip_code', how='left')
     
-    print(f"Successfully enriched data. New columns added.")
+    # Drop rows where census information is missing
+    # We'll check for median_income as a proxy for all census data
+    ca_2022 = ca_2022.dropna(subset=['median_income'])
+    final_count = len(ca_2022)
+    dropped_count = initial_count - final_count
+    
+    print(f"Successfully enriched data.")
+    print(f"Rows dropped due to missing Census information: {dropped_count}")
+    print(f"Final record count: {final_count}")
 else:
     print(f"Failed to fetch Census data. Status code: {r.status_code}")
     print(r.text)
