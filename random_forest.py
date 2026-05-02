@@ -135,10 +135,17 @@ results = {
     "feature_importance": {
         feature: round(value, 4)
         for feature, value in importance.items()
-    }
+    },
+    "actual": [round(v) for v in y_test_actual.values[:1000].tolist()],
+    "predicted": [round(v) for v in y_pred[:1000].tolist()],
+    "residuals": [
+        round(a - p)
+        for a, p in zip(y_test_actual.values[:1000].tolist(), y_pred[:1000].tolist())
+    ]
 }
 
 with open("rf_ca_2022_improved_results.json", "w") as f:
     json.dump(results, f, indent=2)
 
 print("\nSaved rf_ca_2022_improved_results.json")
+
