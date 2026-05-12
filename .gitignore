@@ -1,3 +1,4 @@
 .venv
 us-housing-dataset/us-housing-dataset.csv
 scratch/*
+artifacts/*
