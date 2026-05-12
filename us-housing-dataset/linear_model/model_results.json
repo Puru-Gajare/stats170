@@ -2,7 +2,10 @@
   "metrics": {
     "r2": 0.6075,
     "rmse": 427547,
-    "mae": 287498
+    "mae": 287498,
+    "mape": 35.0533,
+    "cv_r2_mean": 0.6013,
+    "cv_r2_std": 0.0084
   },
   "intercept": 923124,
   "coefficients": {

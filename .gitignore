@@ -2,3 +2,5 @@
 us-housing-dataset/us-housing-dataset.csv
 scratch/*
 artifacts/*
+us-housing-dataset/linear_model/__pycache__/linear_model.cpython-312.pyc
+us-housing-dataset/linear_model/shap_waterfall.png
