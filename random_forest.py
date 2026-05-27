@@ -36,10 +36,18 @@ if not DATA_PATH.exists():
     )
 
 # Load updated cleaned data
+<<<<<<< HEAD
 df = pd.read_pickle(DATA_PATH)
+=======
+df = pd.read_pickle("us-housing-dataset/ca_2022_sold.pkl")
+>>>>>>> 400b554457254dcaef4675405e647c047e09c789
 
 # Basic cleaning
 df = df.drop_duplicates()
+
+# Ensure numeric columns are numpy float64 (pkl may store Python float objects)
+for col in ["price", "bed", "bath", "acre_lot", "house_size", "zip_code"]:
+    df[col] = pd.to_numeric(df[col], errors="coerce")
 
 needed_cols = [
     "price", "bed", "bath", "acre_lot", "city",

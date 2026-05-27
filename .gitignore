@@ -8,3 +8,7 @@ artifacts/visualizations/price_vs_income.png
 artifacts/visualizations/price_vs_size.png
 us-housing-dataset/linear_model/shap_waterfall.png
 us-housing-dataset/linear_model/__pycache__/linear_model.cpython-312.pyc
+artifacts/*
+us-housing-dataset/linear_model/__pycache__/linear_model.cpython-312.pyc
+us-housing-dataset/linear_model/shap_waterfall.png
+xg_outputs/*.png

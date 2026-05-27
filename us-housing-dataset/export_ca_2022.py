@@ -35,7 +35,8 @@ var_list = ",".join(variables.values())
 
 params = {
     "get": f"NAME,{var_list}",
-    "for": "zip code tabulation area:*"
+    "for": "zip code tabulation area:*",
+    "key": "f9bf4a017cc504cc079f60e85eea95bbac83756c",
 }
 
 r = requests.get(BASE_URL, params=params)
@@ -102,6 +103,56 @@ else:
     print(r.text)
 
 # --- END CENSUS DATA ENRICHMENT ---
+
+# --- SCHOOL & LIBRARY ENRICHMENT ---
+# schools_with_zipcode.csv / library_with_zipcode.csv columns:
+#   longitude, latitude, name, amenity, zipcode (int64), zip_distance_km (float64)
+# We aggregate to ZIP-level summary features, then left-join so no housing rows
+# are dropped for ZIPs with no school or library match.
+
+print("Loading and aggregating school data...")
+schools_raw = pd.read_csv('us-housing-dataset/schools_with_zipcode.csv')
+school_zip = (
+    schools_raw
+    .groupby('zipcode')
+    .agg(
+        school_count=('name', 'count'),
+        avg_school_dist_km=('zip_distance_km', 'mean'),
+        min_school_dist_km=('zip_distance_km', 'min'),
+    )
+    .reset_index()
+    .rename(columns={'zipcode': 'zip_code'})
+)
+school_zip['zip_code'] = school_zip['zip_code'].astype(float)
+print(f"  {len(schools_raw):,} school records across {len(school_zip):,} ZIP codes.")
+
+print("Loading and aggregating library data...")
+libs_raw = pd.read_csv('us-housing-dataset/library_with_zipcode.csv')
+lib_zip = (
+    libs_raw
+    .groupby('zipcode')
+    .agg(
+        library_count=('name', 'count'),
+        avg_library_dist_km=('zip_distance_km', 'mean'),
+        min_library_dist_km=('zip_distance_km', 'min'),
+    )
+    .reset_index()
+    .rename(columns={'zipcode': 'zip_code'})
+)
+lib_zip['zip_code'] = lib_zip['zip_code'].astype(float)
+print(f"  {len(libs_raw):,} library records across {len(lib_zip):,} ZIP codes.")
+
+_before = len(ca_2022)
+ca_2022 = ca_2022.merge(school_zip, on='zip_code', how='left')
+ca_2022 = ca_2022.merge(lib_zip,    on='zip_code', how='left')
+assert len(ca_2022) == _before, "Row count changed unexpectedly after school/library merge!"
+
+print(f"  Rows with no school match (NaN kept): {ca_2022['school_count'].isna().sum():,}")
+print(f"  Rows with no library match (NaN kept): {ca_2022['library_count'].isna().sum():,}")
+print("School & library enrichment complete.")
+print(f"Final columns: {ca_2022.columns.tolist()}")
+
+# --- END SCHOOL & LIBRARY ENRICHMENT ---
 
 print(f"Saving to {output_path}...")
 ca_2022.to_pickle(output_path)
