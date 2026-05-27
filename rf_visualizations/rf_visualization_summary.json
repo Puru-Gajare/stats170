@@ -1,0 +1,25 @@
+{
+  "r2": 0.861,
+  "rmse": 309492,
+  "mae": 139925,
+  "plots_saved_to": "rf_visualizations",
+  "features_used": [
+    "bed",
+    "bath",
+    "acre_lot",
+    "house_size",
+    "rooms_total",
+    "bath_per_bed",
+    "sqft_per_bed",
+    "log_house_size",
+    "log_acre_lot",
+    "zip_avg_log_price",
+    "city_avg_log_price",
+    "school_count",
+    "avg_school_dist_km",
+    "min_school_dist_km",
+    "library_count",
+    "avg_library_dist_km",
+    "min_library_dist_km"
+  ]
+}
