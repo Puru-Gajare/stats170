@@ -1,0 +1,62 @@
+{
+  "rows_used": 78279,
+  "features_used": [
+    "bed",
+    "bath",
+    "acre_lot",
+    "house_size",
+    "rooms_total",
+    "bath_per_bed",
+    "sqft_per_bed",
+    "log_house_size",
+    "log_acre_lot",
+    "zip_avg_log_price",
+    "city_avg_log_price",
+    "school_count",
+    "avg_school_dist_km",
+    "min_school_dist_km",
+    "library_count",
+    "avg_library_dist_km",
+    "min_library_dist_km"
+  ],
+  "metrics": {
+    "r2": 0.861,
+    "rmse": 309492,
+    "mae": 139925
+  },
+  "mae_by_price_range": {
+    "<$500k": 56741.9,
+    "$500k\u2013$1M": 76536.83,
+    "$1M\u2013$2M": 203496.14,
+    ">$2M": 688200.08
+  },
+  "feature_importance": {
+    "zip_avg_log_price": 0.31051,
+    "city_avg_log_price": 0.24172,
+    "log_house_size": 0.09925,
+    "house_size": 0.09835,
+    "bath": 0.04512,
+    "rooms_total": 0.04119,
+    "avg_school_dist_km": 0.03194,
+    "bed": 0.0254,
+    "sqft_per_bed": 0.02334,
+    "acre_lot": 0.01819,
+    "log_acre_lot": 0.01806,
+    "min_school_dist_km": 0.01177,
+    "bath_per_bed": 0.01051,
+    "school_count": 0.00783,
+    "min_library_dist_km": 0.00765,
+    "avg_library_dist_km": 0.00713,
+    "library_count": 0.00202
+  },
+  "rf_params": {
+    "n_estimators": 400,
+    "max_depth": 30,
+    "min_samples_split": 5,
+    "min_samples_leaf": 2,
+    "max_features": "sqrt",
+    "bootstrap": true,
+    "random_state": 42,
+    "n_jobs": -1
+  }
+}
