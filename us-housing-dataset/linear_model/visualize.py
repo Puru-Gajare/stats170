@@ -2,9 +2,12 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+from pathlib import Path
 
-# ── Load results from model_ca_2022.py ────────────────────────────────────────
-results_path = 'us-housing-dataset/model_results.json'
+# ── Load results from model_results.json ──────────────────────────────────────
+# Path is resolved relative to this script's directory.
+_HERE = Path(__file__).parent
+results_path = _HERE / 'model_results.json'
 with open(results_path) as f:
     res = json.load(f)
 
@@ -103,7 +106,7 @@ ax_resid.tick_params(labelsize=8)
 ax_resid.legend(fontsize=8)
 ax_resid.grid(axis="y", color="#CCCCCC", linewidth=0.5, zorder=0)
 
-output_img = 'us-housing-dataset/regression_plots.png'
+output_img = _HERE / 'regression_plots.png'
 plt.savefig(output_img, dpi=150, bbox_inches="tight")
 print(f"Saved {output_img}")
 # plt.show() # Disabled for headless run
