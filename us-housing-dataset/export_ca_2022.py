@@ -35,7 +35,8 @@ var_list = ",".join(variables.values())
 
 params = {
     "get": f"NAME,{var_list}",
-    "for": "zip code tabulation area:*"
+    "for": "zip code tabulation area:*",
+    "key": "f9bf4a017cc504cc079f60e85eea95bbac83756c",
 }
 
 r = requests.get(BASE_URL, params=params)

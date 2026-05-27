@@ -32,3 +32,4 @@ urllib3==2.6.3
 us==3.2.0
 xgboost
 shap
+category_encoders

@@ -1,0 +1,10 @@
+Metric,Value
+Train size,"67,464"
+Test size,"16,867"
+Features,12
+RMSE,"$325,634"
+MAE,"$151,823"
+R²,0.8357
+MAPE,17.61%
+CV R² (mean),0.8576
+CV R² (std),0.0037

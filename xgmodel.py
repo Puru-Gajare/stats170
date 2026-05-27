@@ -32,7 +32,7 @@ import os
 
 # ── 0. CONFIG ──────────────────────────────────────────────────────────────────
 PKL_PATH     = "us-housing-dataset/ca_2022_sold.pkl"
-OUTPUT_DIR   = "outputs"
+OUTPUT_DIR   = "xg_outputs"
 RANDOM_STATE = 42
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 

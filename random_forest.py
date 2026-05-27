@@ -7,10 +7,14 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 # Load updated cleaned data
-df = pd.read_pickle("us-housing-dataset/linear_model/ca_2022_sold.pkl")
+df = pd.read_pickle("us-housing-dataset/ca_2022_sold.pkl")
 
 # Basic cleaning
 df = df.drop_duplicates()
+
+# Ensure numeric columns are numpy float64 (pkl may store Python float objects)
+for col in ["price", "bed", "bath", "acre_lot", "house_size", "zip_code"]:
+    df[col] = pd.to_numeric(df[col], errors="coerce")
 
 needed_cols = [
     "price", "bed", "bath", "acre_lot", "city",
