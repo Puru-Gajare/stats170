@@ -1,382 +1,338 @@
-import json
 import sys
-from pathlib import Path
+import os
+import json
+import warnings
 
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
+from sklearn.model_selection import train_test_split, RandomizedSearchCV
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-from sklearn.model_selection import RandomizedSearchCV, train_test_split
+
+warnings.filterwarnings("ignore")
+
+# ==============================
+# Settings
+# ==============================
+DEFAULT_DATA_PATH = "us-housing-dataset/ca_2022_sold.pkl"
+OUTPUT_JSON = "rf_log_tuned_results.json"
+
+# Change this to False after you find good parameters.
+# True = tune many models. False = train one model only.
+USE_RANDOM_SEARCH = True
+
+# Smaller search so it runs faster than the earlier 20 x 3 = 60 fits.
+N_ITER_SEARCH = 5
+CV_FOLDS = 2
 
 
-# ============================================================
-# Random Forest — CA 2022 Sold Homes
-# Version: log target encoding + RandomizedSearchCV tuning
-#
-# Run normally:
-#   python random_forest_log_tuned.py
-#
-# Or pass a pkl path:
-#   python random_forest_log_tuned.py us-housing-dataset/linear_model/ca_2022_sold.pkl
-# ============================================================
+# ==============================
+# Load data
+# ==============================
+def load_data() -> pd.DataFrame:
+    data_path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_DATA_PATH
 
-DEFAULT_DATA_PATH = "us-housing-dataset/linear_model/ca_2022_sold.pkl"
-DATA_PATH = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(DEFAULT_DATA_PATH)
+    if not os.path.exists(data_path):
+        raise FileNotFoundError(
+            f"Could not find pkl file at: {data_path}\n"
+            "Put the pkl file in the same path or pass the path as a command-line argument."
+        )
 
-# Set this to False if tuning takes too long and you only want the default model.
-RUN_RANDOMIZED_SEARCH = True
-N_ITER_SEARCH = 5     
-CV_FOLDS = 3           # 3 is faster; 5 is more stable but slower
+    print(f"Loading data from: {data_path}")
+    return pd.read_pickle(data_path)
 
-if not DATA_PATH.exists():
-    raise FileNotFoundError(
-        f"Could not find {DATA_PATH}. Put the pkl file in the same folder as this script "
-        "or pass the path as a command-line argument."
+
+# ==============================
+# Main pipeline
+# ==============================
+def main():
+    df = load_data()
+    df = df.drop_duplicates().copy()
+
+    # Columns needed for the base model
+    needed_cols = [
+        "price", "bed", "bath", "acre_lot", "city",
+        "state", "zip_code", "house_size"
+    ]
+
+    # Optional influencing-factor columns from new pkl file
+    possible_extra_features = [
+        "school_count",
+        "avg_school_dist_km",
+        "min_school_dist_km",
+        "library_count",
+        "avg_library_dist_km",
+        "min_library_dist_km",
+    ]
+
+    extra_features = [col for col in possible_extra_features if col in df.columns]
+
+    print("Extra influencing-factor features found:")
+    print(extra_features if extra_features else "None")
+
+    # Convert numeric columns safely.
+    # This fixes the error: AttributeError: 'float' object has no attribute 'log1p'
+    numeric_cols = [
+        "price", "bed", "bath", "acre_lot", "house_size"
+    ] + extra_features
+
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    # Drop rows missing the required base columns
+    df = df.dropna(subset=needed_cols).copy()
+
+    # Fill optional influencing-factor missing values
+    # Counts become 0; distance columns become the median distance.
+    for col in extra_features:
+        if "count" in col:
+            df[col] = df[col].fillna(0)
+        else:
+            df[col] = df[col].fillna(df[col].median())
+
+    # Keep realistic values
+    df = df[
+        (df["price"] > 50_000) &
+        (df["price"] < 10_000_000) &
+        (df["house_size"] > 200) &
+        (df["house_size"] < 20_000) &
+        (df["bed"] > 0) &
+        (df["bath"] > 0) &
+        (df["acre_lot"] >= 0) &
+        (df["acre_lot"] < 20)
+    ].copy()
+
+    # Clean categorical columns
+    df["zip_code"] = df["zip_code"].astype(str).str.replace(".0", "", regex=False)
+    df["city"] = df["city"].astype(str).str.lower().str.strip()
+
+    # Split first to avoid data leakage
+    train_df, test_df = train_test_split(
+        df,
+        test_size=0.2,
+        random_state=42
     )
 
-# Load updated cleaned data
-<<<<<<< HEAD
-df = pd.read_pickle(DATA_PATH)
-=======
-df = pd.read_pickle("us-housing-dataset/ca_2022_sold.pkl")
->>>>>>> 400b554457254dcaef4675405e647c047e09c789
+    # ==============================
+    # Log-price target encoding
+    # ==============================
+    train_df = train_df.copy()
+    test_df = test_df.copy()
 
-# Basic cleaning
-df = df.drop_duplicates()
+    train_df["log_price"] = np.log1p(train_df["price"].astype(float))
+    global_mean_log_price = train_df["log_price"].mean()
 
-# Ensure numeric columns are numpy float64 (pkl may store Python float objects)
-for col in ["price", "bed", "bath", "acre_lot", "house_size", "zip_code"]:
-    df[col] = pd.to_numeric(df[col], errors="coerce")
+    zip_avg_log = train_df.groupby("zip_code")["log_price"].mean()
+    city_avg_log = train_df.groupby("city")["log_price"].mean()
 
-needed_cols = [
-    "price", "bed", "bath", "acre_lot", "city",
-    "state", "zip_code", "house_size"
-]
+    train_df["zip_avg_log_price"] = train_df["zip_code"].map(zip_avg_log).fillna(global_mean_log_price)
+    test_df["zip_avg_log_price"] = test_df["zip_code"].map(zip_avg_log).fillna(global_mean_log_price)
 
-missing_needed = [col for col in needed_cols if col not in df.columns]
-if missing_needed:
-    raise ValueError(f"Missing required columns in the pkl file: {missing_needed}")
+    train_df["city_avg_log_price"] = train_df["city"].map(city_avg_log).fillna(global_mean_log_price)
+    test_df["city_avg_log_price"] = test_df["city"].map(city_avg_log).fillna(global_mean_log_price)
 
-df = df.dropna(subset=needed_cols)
+    # ==============================
+    # Engineered features
+    # ==============================
+    for data in [train_df, test_df]:
+        data["rooms_total"] = data["bed"] + data["bath"]
+        data["bath_per_bed"] = data["bath"] / data["bed"]
+        data["sqft_per_bed"] = data["house_size"] / data["bed"]
+        data["log_house_size"] = np.log1p(data["house_size"].astype(float))
+        data["log_acre_lot"] = np.log1p(data["acre_lot"].astype(float))
 
-# Keep realistic values
-df = df[
-    (df["price"] > 50_000) &
-    (df["price"] < 10_000_000) &
-    (df["house_size"] > 200) &
-    (df["house_size"] < 20_000) &
-    (df["bed"] > 0) &
-    (df["bath"] > 0) &
-    (df["acre_lot"] >= 0) &
-    (df["acre_lot"] < 20)
-].copy()
+    # Features
+    features = [
+        "bed",
+        "bath",
+        "acre_lot",
+        "house_size",
+        "rooms_total",
+        "bath_per_bed",
+        "sqft_per_bed",
+        "log_house_size",
+        "log_acre_lot",
+        "zip_avg_log_price",
+        "city_avg_log_price",
+    ] + extra_features
 
-# Clean categorical columns
-df["zip_code"] = df["zip_code"].astype(str).str.replace(".0", "", regex=False)
-df["city"] = df["city"].astype(str).str.lower().str.strip()
+    X_train = train_df[features]
+    X_test = test_df[features]
 
-# ------------------------------------------------------------
-# New influencing-factor features: included only if present
-# ------------------------------------------------------------
-school_features = [
-    "school_count",
-    "avg_school_dist_km",
-    "min_school_dist_km"
-]
+    y_train = np.log1p(train_df["price"].astype(float))
+    y_test_actual = test_df["price"].astype(float)
 
-library_features = [
-    "library_count",
-    "avg_library_dist_km",
-    "min_library_dist_km"
-]
-
-extra_factor_features = [
-    col for col in school_features + library_features
-    if col in df.columns
-]
-
-missing_extra_features = [
-    col for col in school_features + library_features
-    if col not in df.columns
-]
-
-print("Extra influencing-factor features found:")
-print(extra_factor_features)
-
-if missing_extra_features:
-    print("\nExtra influencing-factor features not found, so they will be skipped:")
-    print(missing_extra_features)
-
-# Convert new factor columns to numeric and fill missing values.
-for col in extra_factor_features:
-    df[col] = pd.to_numeric(df[col], errors="coerce")
-    if "count" in col:
-        df[col] = df[col].fillna(0)
-    else:
-        df[col] = df[col].fillna(df[col].median())
-
-# Split first to avoid data leakage
-train_df, test_df = train_test_split(
-    df,
-    test_size=0.2,
-    random_state=42
-)
-
-# ============================================================
-# CHANGE #4: log-price target encoding instead of raw-price encoding
-# Because y_train is log1p(price), encode zip/city using mean log-price.
-# This keeps the encoded location features on the same scale as the model target.
-# ============================================================
-train_df = train_df.copy()
-test_df = test_df.copy()
-
-train_df["log_price"] = np.log1p(train_df["price"])
-
-global_mean_log_price = train_df["log_price"].mean()
-
-zip_avg_log = train_df.groupby("zip_code")["log_price"].mean()
-city_avg_log = train_df.groupby("city")["log_price"].mean()
-
-train_df["zip_avg_log_price"] = train_df["zip_code"].map(zip_avg_log).fillna(global_mean_log_price)
-test_df["zip_avg_log_price"] = test_df["zip_code"].map(zip_avg_log).fillna(global_mean_log_price)
-
-train_df["city_avg_log_price"] = train_df["city"].map(city_avg_log).fillna(global_mean_log_price)
-test_df["city_avg_log_price"] = test_df["city"].map(city_avg_log).fillna(global_mean_log_price)
-
-# Extra engineered structural features
-for data in [train_df, test_df]:
-    data["rooms_total"] = data["bed"] + data["bath"]
-    data["bath_per_bed"] = data["bath"] / data["bed"]
-    data["sqft_per_bed"] = data["house_size"] / data["bed"]
-    data["log_house_size"] = np.log1p(data["house_size"])
-    data["log_acre_lot"] = np.log1p(data["acre_lot"])
-
-# Features: replace raw zip_avg_price/city_avg_price with log versions
-base_features = [
-    "bed",
-    "bath",
-    "acre_lot",
-    "house_size",
-    "rooms_total",
-    "bath_per_bed",
-    "sqft_per_bed",
-    "log_house_size",
-    "log_acre_lot",
-    "zip_avg_log_price",
-    "city_avg_log_price"
-]
-
-features = base_features + extra_factor_features
-
-X_train = train_df[features]
-X_test = test_df[features]
-
-y_train = train_df["log_price"]
-y_test_actual = test_df["price"]
-
-# Default model, used either directly or as estimator for tuning
-base_model = RandomForestRegressor(
-    n_estimators=400,
-    max_depth=30,
-    min_samples_split=5,
-    min_samples_leaf=2,
-    max_features="sqrt",
-    random_state=42,
-    n_jobs=-1
-)
-
-# ============================================================
-# CHANGE #5: Hyperparameter tuning with RandomizedSearchCV
-# This searches several RF settings and picks the best by CV R^2.
-# Since the model predicts log(price), CV R^2 is measured on log(price).
-# Final test metrics below are still converted back to dollars.
-# ============================================================
-if RUN_RANDOMIZED_SEARCH:
-    param_distributions = {
-        "n_estimators": [300, 400],
-        "max_depth": [30, 40],
-        "min_samples_split": [5, 10],
-        "min_samples_leaf": [1, 2],
-        "max_features": ["sqrt", 0.7],
-        "bootstrap": [True]
-    }
-
-    search = RandomizedSearchCV(
-        estimator=base_model,
-        param_distributions=param_distributions,
-        n_iter=5,
-        scoring="r2",
-        cv=2,
-        verbose=2,
+    # ==============================
+    # Model training
+    # ==============================
+    base_model = RandomForestRegressor(
         random_state=42,
         n_jobs=-1
     )
 
-    search.fit(X_train, y_train)
-    model = search.best_estimator_
-    best_params = search.best_params_
-    best_cv_r2 = search.best_score_
-else:
-    model = base_model
-    model.fit(X_train, y_train)
-    best_params = model.get_params()
-    best_cv_r2 = None
+    if USE_RANDOM_SEARCH:
+        print("\nRunning fast RandomizedSearchCV...")
+        print(f"This will train {N_ITER_SEARCH} candidates x {CV_FOLDS} folds = {N_ITER_SEARCH * CV_FOLDS} models.")
 
-# Predict back to dollars
-y_pred_log = model.predict(X_test)
-y_pred = np.expm1(y_pred_log)
+        param_distributions = {
+            "n_estimators": [300, 400, 500],
+            "max_depth": [30, 40, None],
+            "min_samples_split": [2, 5, 10],
+            "min_samples_leaf": [1, 2, 4],
+            "max_features": ["sqrt", 0.5, 0.7],
+            "bootstrap": [True]
+        }
 
-# Prevent impossible negative prices after inverse transform, just in case
-y_pred = np.maximum(y_pred, 0)
+        search = RandomizedSearchCV(
+            estimator=base_model,
+            param_distributions=param_distributions,
+            n_iter=N_ITER_SEARCH,
+            scoring="r2",
+            cv=CV_FOLDS,
+            verbose=2,
+            random_state=42,
+            n_jobs=-1
+        )
 
-# Metrics in dollar scale
-mae = mean_absolute_error(y_test_actual, y_pred)
-rmse = np.sqrt(mean_squared_error(y_test_actual, y_pred))
-r2 = r2_score(y_test_actual, y_pred)
+        search.fit(X_train, y_train)
+        model = search.best_estimator_
+        best_params = search.best_params_
+        best_cv_score = search.best_score_
+    else:
+        print("\nTraining one Random Forest model only...")
+        model = RandomForestRegressor(
+            n_estimators=500,
+            max_depth=40,
+            min_samples_split=5,
+            min_samples_leaf=1,
+            max_features=0.7,
+            bootstrap=True,
+            random_state=42,
+            n_jobs=-1
+        )
+        model.fit(X_train, y_train)
+        best_params = model.get_params()
+        best_cv_score = None
 
-import matplotlib.pyplot as plt
-import os
+    # ==============================
+    # Prediction and metrics
+    # ==============================
+    y_pred_log = model.predict(X_test)
+    y_pred = np.expm1(y_pred_log)
 
-# Create folder for plots
-os.makedirs("rf_visualizations", exist_ok=True)
+    mae = mean_absolute_error(y_test_actual, y_pred)
+    rmse = np.sqrt(mean_squared_error(y_test_actual, y_pred))
+    r2 = r2_score(y_test_actual, y_pred)
 
-# Residuals
-residuals = y_test_actual - y_pred
+    print("\n" + "=" * 55)
+    print("RANDOM FOREST — LOG TARGET ENCODING + TUNING")
+    print("=" * 55)
+    print(f"Rows used : {len(df):,}")
+    print(f"Features  : {len(features)}")
+    print(f"R²        : {r2:.4f}")
+    print(f"RMSE      : ${rmse:,.0f}")
+    print(f"MAE       : ${mae:,.0f}")
 
-# ==============================
-# 1. Actual vs Predicted Plot
-# ==============================
-plt.figure(figsize=(8, 6))
-plt.scatter(y_test_actual, y_pred, alpha=0.4)
+    if USE_RANDOM_SEARCH:
+        print("\nBest CV R²:", round(best_cv_score, 4))
+        print("Best parameters:")
+        print(best_params)
 
-min_price = min(y_test_actual.min(), y_pred.min())
-max_price = max(y_test_actual.max(), y_pred.max())
+    # Feature importance
+    importance = pd.Series(
+        model.feature_importances_,
+        index=features
+    ).sort_values(ascending=False)
 
-plt.plot([min_price, max_price], [min_price, max_price], linestyle="--")
+    print("\nFeature Importance:")
+    print(importance)
 
-plt.xlabel("Actual Price")
-plt.ylabel("Predicted Price")
-plt.title("Random Forest: Actual vs Predicted Home Prices")
-plt.ticklabel_format(style="plain", axis="both")
-plt.tight_layout()
-plt.savefig("rf_visualizations/rf_actual_vs_predicted.png", dpi=300)
-plt.show()
+        # ==============================
+    # SHAP graphs
+    # ==============================
+    try:
+        import shap
+
+        OUTPUT_DIR = "rf_shap_graphs"
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+        SHAP_SAMPLE_SIZE = 300
+
+        X_shap = X_test.sample(
+            n=min(SHAP_SAMPLE_SIZE, len(X_test)),
+            random_state=42
+        )
+
+        print("\nCreating SHAP graphs on sample...")
+
+        explainer = shap.TreeExplainer(model)
+        shap_values = explainer.shap_values(X_shap)
+
+        # SHAP beeswarm plot
+        shap.summary_plot(
+            shap_values,
+            X_shap,
+            show=False
+        )
+        plt.title("Random Forest SHAP Summary Plot")
+        plt.tight_layout()
+        plt.savefig(f"{OUTPUT_DIR}/rf_shap_beeswarm.png", dpi=300, bbox_inches="tight")
+        plt.close()
+
+        # SHAP bar importance plot
+        shap.summary_plot(
+            shap_values,
+            X_shap,
+            plot_type="bar",
+            show=False
+        )
+        plt.title("Random Forest SHAP Feature Importance")
+        plt.tight_layout()
+        plt.savefig(f"{OUTPUT_DIR}/rf_shap_bar_importance.png", dpi=300, bbox_inches="tight")
+        plt.close()
+
+        print(f"Saved SHAP graphs to: {OUTPUT_DIR}")
+
+    except ImportError:
+        print("\nSHAP is not installed. Run this:")
+        print("pip install shap")
+    except Exception as e:
+        print(f"\nSHAP graph skipped because of error: {e}")
+    
+    # Save results
+    results = {
+        "model_name": "Random Forest with Log Target Encoding and Tuning",
+        "rows_used": int(len(df)),
+        "features_used": features,
+        "extra_influencing_factor_features": extra_features,
+        "use_random_search": USE_RANDOM_SEARCH,
+        "best_cv_r2": None if best_cv_score is None else round(float(best_cv_score), 4),
+        "best_params": best_params,
+        "metrics": {
+            "r2": round(float(r2), 4),
+            "rmse": round(float(rmse)),
+            "mae": round(float(mae))
+        },
+        "feature_importance": {
+            feature: round(float(value), 4)
+            for feature, value in importance.items()
+        },
+        "actual": [round(float(v)) for v in y_test_actual.values[:1000].tolist()],
+        "predicted": [round(float(v)) for v in y_pred[:1000].tolist()],
+        "residuals": [
+            round(float(a - p))
+            for a, p in zip(y_test_actual.values[:1000].tolist(), y_pred[:1000].tolist())
+        ]
+    }
+
+    with open(OUTPUT_JSON, "w") as f:
+        json.dump(results, f, indent=2)
+
+    print(f"\nSaved {OUTPUT_JSON}")
 
 
-# ==============================
-# 2. Feature Importance Plot
-# ==============================
-importance = pd.Series(
-    model.feature_importances_,
-    index=features
-).sort_values(ascending=True)
-
-plt.figure(figsize=(9, 7))
-plt.barh(importance.index, importance.values)
-
-plt.xlabel("Feature Importance")
-plt.ylabel("Feature")
-plt.title("Random Forest Feature Importance")
-plt.tight_layout()
-plt.savefig("rf_visualizations/rf_feature_importance.png", dpi=300)
-plt.show()
-
-
-# ==============================
-# 3. Residuals vs Predicted Plot
-# ==============================
-plt.figure(figsize=(8, 6))
-plt.scatter(y_pred, residuals, alpha=0.4)
-plt.axhline(y=0, linestyle="--")
-
-plt.xlabel("Predicted Price")
-plt.ylabel("Residuals: Actual - Predicted")
-plt.title("Random Forest Residuals vs Predicted Prices")
-plt.ticklabel_format(style="plain", axis="both")
-plt.tight_layout()
-plt.savefig("rf_visualizations/rf_residuals_vs_predicted.png", dpi=300)
-plt.show()
-
-
-# ==============================
-# 4. Residual Histogram
-# ==============================
-plt.figure(figsize=(8, 6))
-plt.hist(residuals, bins=50)
-
-plt.xlabel("Residuals: Actual - Predicted")
-plt.ylabel("Frequency")
-plt.title("Random Forest Residual Distribution")
-plt.ticklabel_format(style="plain", axis="x")
-plt.tight_layout()
-plt.savefig("rf_visualizations/rf_residual_histogram.png", dpi=300)
-plt.show()
-
-
-print("\nSaved visualizations to folder: rf_visualizations")
-
-print("=" * 65)
-print("RANDOM FOREST — LOG TARGET ENCODING + HYPERPARAMETER TUNING")
-print("=" * 65)
-print(f"Data file : {DATA_PATH}")
-print(f"Rows used : {len(df):,}")
-print(f"Features  : {len(features)}")
-print(f"R²        : {r2:.4f}")
-print(f"RMSE      : ${rmse:,.0f}")
-print(f"MAE       : ${mae:,.0f}")
-
-if best_cv_r2 is not None:
-    print(f"Best CV R² on log(price): {best_cv_r2:.4f}")
-
-print("\nBest Parameters:")
-print(best_params)
-
-# Feature importance
-importance = pd.Series(
-    model.feature_importances_,
-    index=features
-).sort_values(ascending=False)
-
-print("\nFeature Importance:")
-print(importance)
-
-# Save results
-results = {
-    "model_name": "Random Forest CA 2022 Sold Homes - Log Target Encoding + Tuning",
-    "data_file": str(DATA_PATH),
-    "rows_used": len(df),
-    "features_used": features,
-    "extra_influencing_factor_features_used": extra_factor_features,
-    "extra_influencing_factor_features_missing": missing_extra_features,
-    "target_encoding": "zip/city mean log1p(price), training data only",
-    "randomized_search": {
-        "enabled": RUN_RANDOMIZED_SEARCH,
-        "n_iter": N_ITER_SEARCH if RUN_RANDOMIZED_SEARCH else None,
-        "cv_folds": CV_FOLDS if RUN_RANDOMIZED_SEARCH else None,
-        "best_cv_r2_log_price": round(best_cv_r2, 4) if best_cv_r2 is not None else None,
-        "best_params": best_params
-    },
-    "metrics_dollar_scale": {
-        "r2": round(r2, 4),
-        "rmse": round(rmse),
-        "mae": round(mae)
-    },
-    "feature_importance": {
-        feature: round(value, 4)
-        for feature, value in importance.items()
-    },
-    "actual": [round(v) for v in y_test_actual.values[:1000].tolist()],
-    "predicted": [round(v) for v in y_pred[:1000].tolist()],
-    "residuals": [
-        round(a - p)
-        for a, p in zip(y_test_actual.values[:1000].tolist(), y_pred[:1000].tolist())
-    ]
-}
-
-output_path = "rf_ca_2022_log_tuned_results.json"
-
-with open(output_path, "w") as f:
-    json.dump(results, f, indent=2)
-
-print(f"\nSaved {output_path}")
+if __name__ == "__main__":
+    main()
