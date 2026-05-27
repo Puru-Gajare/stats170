@@ -10,7 +10,10 @@ import json
 
 FEATURES = [
     'bed', 'bath', 'house_size', 'acre_lot', 'city_encoded',
-    'median_income', 'population', 'poverty_rate', 'bachelors_rate'
+    'median_income', 'population', 'poverty_rate', 'bachelors_rate',
+    # School & library proximity features (from schools_with_zipcode / library_with_zipcode)
+    'school_count', 'avg_school_dist_km', 'min_school_dist_km',
+    'library_count', 'avg_library_dist_km', 'min_library_dist_km',
 ]
 
 # Paths are resolved relative to this file so the script works from any CWD.
@@ -28,6 +31,18 @@ def load_and_clean_data(pkl_path=PKL_PATH) -> pd.DataFrame:
     core_cols = ['price', 'bed', 'bath', 'house_size', 'acre_lot', 'city',
                  'median_income', 'population', 'poverty_rate', 'bachelors_rate']
     df = df.dropna(subset=core_cols)
+
+    # Fill missing school/library features with 0 (ZIPs with no match in the
+    # infrastructure data — roughly 2k rows for schools, 38k for libraries).
+    infra_cols = [
+        'school_count', 'avg_school_dist_km', 'min_school_dist_km',
+        'library_count', 'avg_library_dist_km', 'min_library_dist_km',
+    ]
+    for col in infra_cols:
+        if col in df.columns:
+            df[col] = df[col].fillna(0)
+        else:
+            df[col] = 0  # column absent from pkl (pre-enrichment pkl)
 
     # Filter out extreme outliers for a more stable linear model
     df = df[(df['price'] < 5_000_000) & (df['price'] > 100_000)]
