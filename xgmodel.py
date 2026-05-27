@@ -340,5 +340,27 @@ summary = pd.DataFrame({
 print(summary.to_string(index=False))
 summary.to_csv(f"{OUTPUT_DIR}/model_summary.csv", index=False)
 
+# Save metrics and predictions for model comparison
+import json
+results = {
+    "model_name": "XGBoost CA 2022 Sold Homes",
+    "rows_used": len(df),
+    "metrics": {
+        "r2": round(r2, 4),
+        "rmse": round(rmse),
+        "mae": round(mae),
+        "mape": round(mape, 2)
+    },
+    "actual": [round(v) for v in y_test_price.values[:1000].tolist()],
+    "predicted": [round(v) for v in y_pred_price[:1000].tolist()],
+    "residuals": [
+        round(a - p)
+        for a, p in zip(y_test_price.values[:1000].tolist(), y_pred_price[:1000].tolist())
+    ]
+}
+with open(f"{OUTPUT_DIR}/xg_ca_2022_results.json", "w") as f:
+    json.dump(results, f, indent=2)
+print(f"  Saved xg_ca_2022_results.json")
+
 print(f"\nAll outputs saved to ./{OUTPUT_DIR}/")
 print("Done!")
