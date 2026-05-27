@@ -7,7 +7,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 # Load updated cleaned data
-df = pd.read_pickle("us-housing-dataset/ca_2022_sold.pkl")
+df = pd.read_pickle("us-housing-dataset/linear_model/ca_2022_sold.pkl")
 
 # Basic cleaning
 df = df.drop_duplicates()

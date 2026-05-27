@@ -8,7 +8,7 @@ import json
 import os
 
 # ── Load & clean ──────────────────────────────────────────────────────────────
-pkl_path = 'us-housing-dataset/ca_2022_sold.pkl'
+pkl_path = 'us-housing-dataset/linear_model/ca_2022_sold.pkl'
 print(f"Loading {pkl_path}...")
 df = pd.read_pickle(pkl_path)
 
